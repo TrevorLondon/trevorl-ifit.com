@@ -1,0 +1,34 @@
+/* Users new in the last 30 days with workout counts */
+SELECT count(distinct _id) as Unique_Users, SUM(Wkout_Count) as Wkout_Count,
+  account__subscription_type, account__trial_membership 
+FROM ( 
+SELECT users._id, login__ifit__email, created, account__subscription_type, account__trial_membership,
+  SUM (CASE
+    WHEN unique_logs."start" is NOT NULL THEN 1
+    WHEN unique_logs."start" is NULL THEN 0 
+    END) as Wkout_Count
+FROM prodmongo.users
+LEFT JOIN unique_logs on users._id = unique_logs.user_id
+WHERE "created" >= getdate()::date - 30
+GROUP BY users._id, login__ifit__email, created, account__subscription_type, account__trial_membership)
+GROUP BY account__subscription_type, account__trial_membership
+ORDER BY wkout_count DESC
+
+
+/*Existing Users not new in 30 days with workout count */
+Select count(distinct _id) as Unique_Users, SUM(Wkout_Count) as Wkout_Count,
+ account__subscription_type, account__trial_membership
+FROM (
+select users._id, login__ifit__email, created, account__subscription_type, account__trial_membership,
+      SUM (CASE
+        WHEN unique_logs."start" is NOT NULL THEN 1
+        WHEN unique_logs."start" is NULL THEN 0
+        END) as Wkout_Count,
+        "start"
+FROM prodmongo.users
+JOIN unique_logs on users._id = unique_logs.user_id
+WHERE "created" < getdate()::date - 30
+AND CONVERT_TIMEZONE('America/Denver', start_minute)::date BETWEEN '2020-03-01' AND '2020-04-15'
+GROUP BY users._id, login__ifit__email, created, account__subscription_type, account__trial_membership, "start" ) 
+GROUP BY account__subscription_type, account__trial_membership
+ORDER BY wkout_count desc
