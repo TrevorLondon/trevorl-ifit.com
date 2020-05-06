@@ -1,0 +1,675 @@
+/* ALL CODE FOR ATW ANALYSIS - 90 DAY SEGEMENTS - KEVIN */ 
+
+/* REVISED A Group (foundation data set) */
+drop table public.trevor_redbox_group
+create table public.trevor_redbox_group as (
+  SELECT distinct(users._id), login__ifit__email, account__subscription_type, "created", account__payment_type
+  FROM prodmongo.users
+  LEFT JOIN prodmongo.orders on users._id = orders.user_Id
+  WHERE CONVERT_TIMEZONE('America/Denver',"created")::date BETWEEN '2020-01-23' AND '2020-04-21'
+  AND promo_code != 'FREE30ISO' )
+  
+select count(*) from trevor_redbox_group
+select count (distinct _id) from trevor_redbox_group
+
+/* Getting a Flag indicating most recent account type/payment type */
+SELECT * FROM (
+  SELECT _id, login__ifit__email, account__subscription_type, "created", account__payment_type, "date" as Last_Change
+  FROM trevor_redbox_group
+  LEFT JOIN (
+    select * from (
+      select users_id, "date",
+      row_number() over (partition by users_id order by "date" DESC) as Event_Date
+      FROM prodmongo.users__account_history)
+    where Event_Date = 1) Event_Table
+  on trevor_redbox_group._id = Event_Table.users_id )
+  
+drop table public.trevor_redbox_group_status
+CREATE TABLE public.trevor_redbox_group_status as (
+--select membership_type, count(*) FROM 
+SELECT trevor_redbox_group.*, trial_membership,
+        CASE WHEN "date" BETWEEN order_date - INTERVAL '2 minute' AND order_date + INTERVAL '2 minute'
+                AND trial_membership = 'true' THEN 'Free_Trial'
+         WHEN subscription_set_to = 'free' THEN 'Free'
+         ELSE 'Paid'
+         END as Membership_Type
+FROM trevor_redbox_group
+LEFT JOIN (
+      SELECT * FROM (
+        SELECT users_id, "date", subscription_set_to, row_number() over (partition by users_id order by "date" DESC) as Most_Recent
+        FROM prodmongo.users__account_history
+        WHERE "date"::date < '2020-04-21')
+       WHERE Most_Recent = 1) Most_Recent_UAH 
+ON trevor_redbox_group._id = Most_Recent_UAH.users_id
+LEFT JOIN (
+        SELECT * FROM (
+          SELECT user_id, order_date, orders._id, row_number() over (partition by user_id order by order_date DESC) as Ord_Date
+          FROM prodmongo.orders
+          WHERE order_date::date < '2020-04-21')
+        WHERE Ord_Date = 1) Order_Date_Table
+ON Most_Recent_UAH.users_id = Order_Date_Table.user_id
+LEFT JOIN prodmongo.orders__items on Order_Date_Table._id = orders__items.orders_id
+LEFT JOIN prodmongo.items on orders__items."item" = items._id)
+
+select membership_type, count(*) from trevor_redbox_group_status group by membership_type;
+  
+/* Users from ^^ that logged a workout in date range of 03-30-20 and 04-21-2020 */
+--SUBSET A1b
+drop table public.trevor_redbox_wkout_group
+CREATE TABLE public.trevor_redbox_wkout_group AS (
+SELECT *
+--trevor_redbox_group._id, login__ifit__email, account__subscription_type 
+     --Wkout_Count
+FROM trevor_redbox_group
+LEFT JOIN (
+    select user_id, start_minute, unique_logs._id /*sum(case when user_id is NULL THEN 0
+              when user_id is NOT NULL THEN 1
+              END) as Wkout_Count */
+    FROM unique_logs
+    WHERE CONVERT_TIMEZONE('America/Denver',start_minute)::date BETWEEN '2020-03-30' AND '2020-04-21'
+    /*GROUP BY user_id, start_minute, _id*/) Users_Workouts
+ON trevor_redbox_group._id = Users_Workouts.user_id
+WHERE user_id = '5ea02102397bdf01e0366f1a' )
+
+select * from unique_logs 
+where user_id = '5e627e97ad11ae002a2275bf'
+AND CONVERT_TIMEZONE('America/Denver',start_minute)::date BETWEEN '2020-03-30' AND '2020-04-21'
+
+select count(*) from trevor_redbox_wkout_group
+select count(*) from trevor_redbox_group
+select * from trevor_redbox_group limit 10
+select * from trevor_redbox_group_status limit 10
+
+/* Putting this ^ segment into the 3 membership cats */
+SELECT COUNT(*), membership_type FROM ( 
+SELECT trevor_redbox_wkout_group.*, membership_type
+FROM trevor_redbox_wkout_group 
+JOIN trevor_redbox_group_status on trevor_redbox_wkout_group._id = trevor_redbox_group_status._id) 
+GROUP BY membership_type
+
+/* 75k users that logged a wkout with status flag */
+select membership_type, count(*) FROM (
+SELECT trevor_redbox_wkout_group.*, trial_membership,
+        CASE WHEN "date" BETWEEN order_date - INTERVAL '2 minute' AND order_date + INTERVAL '2 minute'
+                AND trial_membership = 'true' THEN 'Free_Trial'
+         WHEN subscription_set_to = 'free' THEN 'Free'
+         ELSE 'Paid'
+         END as Membership_Type
+FROM trevor_redbox_wkout_group
+LEFT JOIN (
+      SELECT * FROM (
+        SELECT users_id, "date", subscription_set_to, row_number() over (partition by users_id order by "date" DESC) as Most_Recent
+        FROM prodmongo.users__account_history
+        WHERE "date"::date < '2020-04-21')
+       WHERE Most_Recent = 1) Most_Recent_UAH 
+ON trevor_redbox_wkout_group._id = Most_Recent_UAH.users_id
+LEFT JOIN (
+        SELECT * FROM (
+          SELECT user_id, order_date, orders._id, row_number() over (partition by user_id order by order_date DESC) as Ord_Date
+          FROM prodmongo.orders
+          WHERE order_date::date < '2020-04-21')
+        WHERE Ord_Date = 1) Order_Date_Table
+ON Most_Recent_UAH.users_id = Order_Date_Table.user_id
+LEFT JOIN prodmongo.orders__items on Order_Date_Table._id = orders__items.orders_id
+LEFT JOIN prodmongo.items on orders__items."item" = items._id)
+GROUP BY membership_type
+
+select * from trevor_redbox_wkout_group
+WHERE _id = '5e2a09dfaaab6f002b19713c'
+
+
+/* How many new acquisitions (1st 90 day) signed up for ATW Challenge? */
+SELECT COUNT(*), membership_type FROM (
+  SELECT * 
+  FROM trevor_redbox_group
+  JOIN temp_atw_users_TL_2 on trevor_redbox_group._id = temp_atw_users_tl_2.user_id
+  JOIN trevor_redbox_group_status on temp_atw_users_tl_2.user_id = trevor_redbox_group_status._id)
+GROUP BY membership_type
+
+/* How many of this ^ group completed the challenge? */
+SELECT COUNT(*), membership_type FROM (
+ SELECT * FROM (
+ SELECT COUNT(*), _id, membership_type FROM ( 
+  SELECT trevor_redbox_group._id, 
+        unique_logs.workout_id, unique_logs.duration, target_type, target_value,
+       (unique_logs.duration / 1000) as Duration_Secs,
+       round((unique_logs.duration / 1000) / target_value, 2) as Percent_Complete,
+       membership_type, start_minute
+  FROM trevor_redbox_group
+  JOIN trevor_redbox_group_status on trevor_redbox_group._id = trevor_redbox_group_status._id
+  JOIN temp_atw_users_tl_2 on trevor_redbox_group_status._id = temp_atw_users_tl_2.user_id
+  LEFT JOIN unique_logs on temp_atw_users_tl_2.user_id = unique_logs.user_id
+  LEFT JOIN prodmongo.workouts on unique_logs.workout_id = workouts._id
+  WHERE unique_logs.workout_id IN ('5c5090c9b3b7a702dffe4db7',
+'5be65a707f9749002daa235f',
+'5dd5a3b23354ad00a23e516a',
+'5dd6eb4b5fa50e002dfcd3d4',
+'5dc1b60a43c74a01090c0fa6',
+'5dd589556bce4600319ea974',
+'5c33bc2d03777a0043e60a27',
+'5dd41ccb3344720079a9a6c6',
+'5dd5703e458a8b007cc0e8d5',
+'5c4b789637e65804dfc1369e',
+'5c10009c4de9ec002931179f',
+'5dd45b1f3fc9bf0101a32037',
+'5c12b7482c73e501177aa064',
+'5c4f9342555423006d7eb85d',
+'5c09abf930900f00296ad985',
+'5dd4502f8be18700344d9874',
+'5c18097f3b8069002d3e90a8',
+'5e13695cb7e4ac04b125ff0f',
+'5dd6b4f0aab46c015f7726f8',
+'5dd438789b33a302739fec30',
+'5c5c3fc30a859502692e4d97',
+'5dd2b41c08f91c0030557211',
+'5dbcab2da199c901371704dd',
+'5af328e803187d002d26d24f',
+'5dd6b656af3dcc0126925d0e',
+'5dcb42b858409000ab9b2860',
+'5d5af312dd1aed0082b311cf',
+'5cc8b833c323ae01be8966a8',
+'5dcee4e80fb2050035236576',
+'5d1b8b0712be34009f54ff92',
+'5c0adbaa0673b4002efeac77',
+'5bb5076aed60a1002c8e8fc2',
+'5da601ba0821bc181a4ea96d',
+'5d7a8f6134440f0514f0c3f1',
+'5dc1c8f36e903a002ea48f9a',
+'5c64a0846f74c90124b26508',
+'5dc1e20a6e903a002ea5cc72',
+'5cb79cf3704fc5064c1dbc55',
+'5d41d830a834c702a2a380e8',
+'5e064b765d90a9008f9fe1dd',
+'5c754dd9b0e21d0181c0782f',
+'5c86f101d8715c0170fc09c0',
+'5c64a0846f74c90124b26508',
+'5d1ba6040e98210099abc480',
+'5c754dd9b0e21d0181c0782f',
+'5e5457ef4c11ae00071ba70f',
+'5af328e803187d002d26d24f',
+'5e064b765d90a9008f9fe1dd',
+'5d41d830a834c702a2a380e8',
+'5d5af312dd1aed0082b311cf',
+'5c0adbaa0673b4002efeac77',
+'5d693a39afdf49033a720b9c',
+'5cc8b833c323ae01be8966a8',
+'5cb79cf3704fc5064c1dbc55',
+'5d1b8b0712be34009f54ff92',
+'5cfe5ab4e3ae8505136a62b4',
+'5d8ce116105b3800c80ee76c',
+'5bb5076aed60a1002c8e8fc2',
+'5da601ba0821bc181a4ea96d',
+'5d7a8f6134440f0514f0c3f1',
+'5bcf9d4c568514002e6c24b8',
+'5b198f11adbad1002f301b2c',
+'5d7811021b5eb70643e298f9',
+'5e31989129e96a00084b5be5',
+'5e4c0946426c450007615775',
+'5da64a26d954fb1a6e14eaa7',
+'5d7a6888a527d503f11f37b4',
+'5d8e2946443b8a03f072f2dc',
+'5ce41b4e69ab26006c2ff58d',
+'5c09b9d330900f00296ad997',
+'5c532de3ff4f51002dae9cd8',
+'5e5824b5106e4300063d9080',
+'5b9804bbf62e3f002801f33e',
+'5c37af9757b9970029a9b84f',
+'5d48511a3158181138bd25a6',
+'5c1273b7088544002811a25d',
+'5d00fbc488bb24017533c13c',
+'5ba51f8bb4fba6002cac5b6e',
+'5be07583e1c774002d3b377f',
+'5c476111a108190030ff2f2b',
+'5c3794cc57b9970029a9b82b',
+'5d03c8f2e6bb07002c01581a',
+'5d52e4538a2b170401fde782',
+'5d952c948ee5670317d0d09f') 
+AND CONVERT_TIMEZONE('America/Denver', start_minute)::date BETWEEN '2020-03-30' AND '2020-04-21')
+WHERE percent_complete >= 0.7
+GROUP BY _id, membership_type)
+WHERE count >= 7)
+GROUP BY membership_type;
+
+/* How many of the 1st 90 day, did a wkout gruop signed up for the ATW challenge */
+SELECT _id, login__ifit__email, account__subscription_type
+FROM trevor_redbox_wkout_group TRWG
+JOIN temp_ATW_Users_TL_2 TAUT2 on TRWG._id = TAUT2.user_id
+
+/*How many of this ^ subset logged a wkout BEFORE 03/30/2020 */
+SELECT COUNT(DISTINCT _id) FROM (
+SELECT * FROM ( 
+SELECT A._id, start_minute from unique_logs
+JOIN trevor_redbox_wkout_group A on unique_logs.user_id = A._id
+JOIN temp_ATW_Users_TL_2 on unique_logs.user_id = temp_ATW_Users_TL_2.user_id
+GROUP BY a._ID, start_minute)
+WHERE CONVERT_TIMEZONE('America/Denver',start_minute)::date < '2020-03-30')
+
+/*How many of this ^^ subset logged a wkout between 03/30/2020 - 04/21/2020 */
+SELECT COUNT(DISTINCT _id) FROM ( 
+SELECT * FROM ( 
+SELECT A._id, start_minute from unique_logs
+JOIN trevor_redbox_wkout_group A on unique_logs.user_id = A._id
+JOIN temp_ATW_Users_TL_2 on unique_logs.user_id = temp_ATW_Users_TL_2.user_id
+GROUP BY a._ID, start_minute)
+WHERE CONVERT_TIMEZONE('America/Denver',start_minute)::date BETWEEN '2020-03-30' AND '2020-04-21' )
+
+/*how many of this ^ subset logged their 1st wkout  */
+--The logic behind temp_ATW_Users_TL_2 is the list of Users that "signed up". 
+SELECT * FROM ( 
+SELECT A._id, MIN(start_minute) from unique_logs
+JOIN trevor_redbox_wkout_group A on unique_logs.user_id = A._id
+JOIN temp_ATW_Users_TL_2 on unique_logs.user_id = temp_ATW_Users_TL_2.user_id
+GROUP BY a._ID)
+WHERE min::date BETWEEN '2020-03-30' AND '2020-04-21'
+
+/* How many of subset A1b logged a wkout within the ATW series? */
+SELECT DISTINCT(_id) FROM ( 
+SELECT A._id, workout_id, "type"
+FROM trevor_redbox_wkout_group A 
+JOIN unique_logs on A._id = unique_logs.user_id 
+JOIN temp_ATW_Users_TL_2 B on unique_logs.user_id = B.user_id
+WHERE unique_logs.workout_id IN ('5c5090c9b3b7a702dffe4db7',
+'5be65a707f9749002daa235f',
+'5dd5a3b23354ad00a23e516a',
+'5dd6eb4b5fa50e002dfcd3d4',
+'5dc1b60a43c74a01090c0fa6',
+'5dd589556bce4600319ea974',
+'5c33bc2d03777a0043e60a27',
+'5dd41ccb3344720079a9a6c6',
+'5dd5703e458a8b007cc0e8d5',
+'5c4b789637e65804dfc1369e',
+'5c10009c4de9ec002931179f',
+'5dd45b1f3fc9bf0101a32037',
+'5c12b7482c73e501177aa064',
+'5c4f9342555423006d7eb85d',
+'5c09abf930900f00296ad985',
+'5dd4502f8be18700344d9874',
+'5c18097f3b8069002d3e90a8',
+'5e13695cb7e4ac04b125ff0f',
+'5dd6b4f0aab46c015f7726f8',
+'5dd438789b33a302739fec30',
+'5c5c3fc30a859502692e4d97',
+'5dd2b41c08f91c0030557211',
+'5dbcab2da199c901371704dd',
+'5af328e803187d002d26d24f',
+'5dd6b656af3dcc0126925d0e',
+'5dcb42b858409000ab9b2860',
+'5d5af312dd1aed0082b311cf',
+'5cc8b833c323ae01be8966a8',
+'5dcee4e80fb2050035236576',
+'5d1b8b0712be34009f54ff92',
+'5c0adbaa0673b4002efeac77',
+'5bb5076aed60a1002c8e8fc2',
+'5da601ba0821bc181a4ea96d',
+'5d7a8f6134440f0514f0c3f1',
+'5dc1c8f36e903a002ea48f9a',
+'5c64a0846f74c90124b26508',
+'5dc1e20a6e903a002ea5cc72',
+'5cb79cf3704fc5064c1dbc55',
+'5d41d830a834c702a2a380e8',
+'5e064b765d90a9008f9fe1dd',
+'5c754dd9b0e21d0181c0782f',
+'5c86f101d8715c0170fc09c0',
+'5c64a0846f74c90124b26508',
+'5d1ba6040e98210099abc480',
+'5c754dd9b0e21d0181c0782f',
+'5e5457ef4c11ae00071ba70f',
+'5af328e803187d002d26d24f',
+'5e064b765d90a9008f9fe1dd',
+'5d41d830a834c702a2a380e8',
+'5d5af312dd1aed0082b311cf',
+'5c0adbaa0673b4002efeac77',
+'5d693a39afdf49033a720b9c',
+'5cc8b833c323ae01be8966a8',
+'5cb79cf3704fc5064c1dbc55',
+'5d1b8b0712be34009f54ff92',
+'5cfe5ab4e3ae8505136a62b4',
+'5d8ce116105b3800c80ee76c',
+'5bb5076aed60a1002c8e8fc2',
+'5da601ba0821bc181a4ea96d',
+'5d7a8f6134440f0514f0c3f1',
+'5bcf9d4c568514002e6c24b8',
+'5b198f11adbad1002f301b2c',
+'5d7811021b5eb70643e298f9',
+'5e31989129e96a00084b5be5',
+'5e4c0946426c450007615775',
+'5da64a26d954fb1a6e14eaa7',
+'5d7a6888a527d503f11f37b4',
+'5d8e2946443b8a03f072f2dc',
+'5ce41b4e69ab26006c2ff58d',
+'5c09b9d330900f00296ad997',
+'5c532de3ff4f51002dae9cd8',
+'5e5824b5106e4300063d9080',
+'5b9804bbf62e3f002801f33e',
+'5c37af9757b9970029a9b84f',
+'5d48511a3158181138bd25a6',
+'5c1273b7088544002811a25d',
+'5d00fbc488bb24017533c13c',
+'5ba51f8bb4fba6002cac5b6e',
+'5be07583e1c774002d3b377f',
+'5c476111a108190030ff2f2b',
+'5c3794cc57b9970029a9b82b',
+'5d03c8f2e6bb07002c01581a',
+'5d52e4538a2b170401fde782',
+'5d952c948ee5670317d0d09f')
+AND CONVERT_TIMEZONE('America/Denver',start_minute)::date BETWEEN '2020-03-30' AND '2020-04-21')
+
+/* How many of subset A1b logged their FIRST wkout WITHIN the ATW Series in Date Range */
+SELECT distinct(_id) FROM ( 
+SELECT A._id, MIN(start_minute), workout_id from unique_logs
+JOIN trevor_redbox_wkout_group A on unique_logs.user_id = A._id
+JOIN temp_ATW_Users_TL_2 on unique_logs.user_id = temp_ATW_Users_TL_2.user_id
+GROUP BY a._ID, workout_id)
+WHERE workout_ID IN ('5c5090c9b3b7a702dffe4db7',
+'5be65a707f9749002daa235f',
+'5dd5a3b23354ad00a23e516a',
+'5dd6eb4b5fa50e002dfcd3d4',
+'5dc1b60a43c74a01090c0fa6',
+'5dd589556bce4600319ea974',
+'5c33bc2d03777a0043e60a27',
+'5dd41ccb3344720079a9a6c6',
+'5dd5703e458a8b007cc0e8d5',
+'5c4b789637e65804dfc1369e',
+'5c10009c4de9ec002931179f',
+'5dd45b1f3fc9bf0101a32037',
+'5c12b7482c73e501177aa064',
+'5c4f9342555423006d7eb85d',
+'5c09abf930900f00296ad985',
+'5dd4502f8be18700344d9874',
+'5c18097f3b8069002d3e90a8',
+'5e13695cb7e4ac04b125ff0f',
+'5dd6b4f0aab46c015f7726f8',
+'5dd438789b33a302739fec30',
+'5c5c3fc30a859502692e4d97',
+'5dd2b41c08f91c0030557211',
+'5dbcab2da199c901371704dd',
+'5af328e803187d002d26d24f',
+'5dd6b656af3dcc0126925d0e',
+'5dcb42b858409000ab9b2860',
+'5d5af312dd1aed0082b311cf',
+'5cc8b833c323ae01be8966a8',
+'5dcee4e80fb2050035236576',
+'5d1b8b0712be34009f54ff92',
+'5c0adbaa0673b4002efeac77',
+'5bb5076aed60a1002c8e8fc2',
+'5da601ba0821bc181a4ea96d',
+'5d7a8f6134440f0514f0c3f1',
+'5dc1c8f36e903a002ea48f9a',
+'5c64a0846f74c90124b26508',
+'5dc1e20a6e903a002ea5cc72',
+'5cb79cf3704fc5064c1dbc55',
+'5d41d830a834c702a2a380e8',
+'5e064b765d90a9008f9fe1dd',
+'5c754dd9b0e21d0181c0782f',
+'5c86f101d8715c0170fc09c0',
+'5c64a0846f74c90124b26508',
+'5d1ba6040e98210099abc480',
+'5c754dd9b0e21d0181c0782f',
+'5e5457ef4c11ae00071ba70f',
+'5af328e803187d002d26d24f',
+'5e064b765d90a9008f9fe1dd',
+'5d41d830a834c702a2a380e8',
+'5d5af312dd1aed0082b311cf',
+'5c0adbaa0673b4002efeac77',
+'5d693a39afdf49033a720b9c',
+'5cc8b833c323ae01be8966a8',
+'5cb79cf3704fc5064c1dbc55',
+'5d1b8b0712be34009f54ff92',
+'5cfe5ab4e3ae8505136a62b4',
+'5d8ce116105b3800c80ee76c',
+'5bb5076aed60a1002c8e8fc2',
+'5da601ba0821bc181a4ea96d',
+'5d7a8f6134440f0514f0c3f1',
+'5bcf9d4c568514002e6c24b8',
+'5b198f11adbad1002f301b2c',
+'5d7811021b5eb70643e298f9',
+'5e31989129e96a00084b5be5',
+'5e4c0946426c450007615775',
+'5da64a26d954fb1a6e14eaa7',
+'5d7a6888a527d503f11f37b4',
+'5d8e2946443b8a03f072f2dc',
+'5ce41b4e69ab26006c2ff58d',
+'5c09b9d330900f00296ad997',
+'5c532de3ff4f51002dae9cd8',
+'5e5824b5106e4300063d9080',
+'5b9804bbf62e3f002801f33e',
+'5c37af9757b9970029a9b84f',
+'5d48511a3158181138bd25a6',
+'5c1273b7088544002811a25d',
+'5d00fbc488bb24017533c13c',
+'5ba51f8bb4fba6002cac5b6e',
+'5be07583e1c774002d3b377f',
+'5c476111a108190030ff2f2b',
+'5c3794cc57b9970029a9b82b',
+'5d03c8f2e6bb07002c01581a',
+'5d52e4538a2b170401fde782',
+'5d952c948ee5670317d0d09f')
+--AND CONVERT_TIMEZONE('America/Denver',start_minute)::date BETWEEN '2020-03-30' AND '2020-04-21'
+AND min::date BETWEEN '2020-03-30' AND '2020-04-21'
+
+/* A2: How many of these Users (of Group A - users that logged a wkout in range) completed the challenge? */
+select * from ( 
+select user_id, login__ifit__email, count(*) from ( 
+select temp_ATW_Users_TL_2.user_id, login__ifit__email, 
+        unique_logs.workout_id, unique_logs."type", unique_logs.duration, target_type, target_value,
+       (unique_logs.duration / 1000) as Duration_Secs,
+       round((unique_logs.duration / 1000) / target_value, 2) as Percent_Complete
+from temp_ATW_Users_TL_2 --this was created from users supplied in csv from Tracy - took Unique from list and made table
+JOIN trevor_redbox_group on temp_ATW_Users_TL_2.user_id = trevor_redbox_group._id
+LEFT JOIN unique_logs on trevor_redbox_group._id = unique_logs.user_id 
+LEFT JOIN prodmongo.workouts on unique_logs.workout_id = workouts._id
+WHERE unique_logs.workout_id IN ('5c5090c9b3b7a702dffe4db7',
+'5be65a707f9749002daa235f',
+'5dd5a3b23354ad00a23e516a',
+'5dd6eb4b5fa50e002dfcd3d4',
+'5dc1b60a43c74a01090c0fa6',
+'5dd589556bce4600319ea974',
+'5c33bc2d03777a0043e60a27',
+'5dd41ccb3344720079a9a6c6',
+'5dd5703e458a8b007cc0e8d5',
+'5c4b789637e65804dfc1369e',
+'5c10009c4de9ec002931179f',
+'5dd45b1f3fc9bf0101a32037',
+'5c12b7482c73e501177aa064',
+'5c4f9342555423006d7eb85d',
+'5c09abf930900f00296ad985',
+'5dd4502f8be18700344d9874',
+'5c18097f3b8069002d3e90a8',
+'5e13695cb7e4ac04b125ff0f',
+'5dd6b4f0aab46c015f7726f8',
+'5dd438789b33a302739fec30',
+'5c5c3fc30a859502692e4d97',
+'5dd2b41c08f91c0030557211',
+'5dbcab2da199c901371704dd',
+'5af328e803187d002d26d24f',
+'5dd6b656af3dcc0126925d0e',
+'5dcb42b858409000ab9b2860',
+'5d5af312dd1aed0082b311cf',
+'5cc8b833c323ae01be8966a8',
+'5dcee4e80fb2050035236576',
+'5d1b8b0712be34009f54ff92',
+'5c0adbaa0673b4002efeac77',
+'5bb5076aed60a1002c8e8fc2',
+'5da601ba0821bc181a4ea96d',
+'5d7a8f6134440f0514f0c3f1',
+'5dc1c8f36e903a002ea48f9a',
+'5c64a0846f74c90124b26508',
+'5dc1e20a6e903a002ea5cc72',
+'5cb79cf3704fc5064c1dbc55',
+'5d41d830a834c702a2a380e8',
+'5e064b765d90a9008f9fe1dd',
+'5c754dd9b0e21d0181c0782f',
+'5c86f101d8715c0170fc09c0',
+'5c64a0846f74c90124b26508',
+'5d1ba6040e98210099abc480',
+'5c754dd9b0e21d0181c0782f',
+'5e5457ef4c11ae00071ba70f',
+'5af328e803187d002d26d24f',
+'5e064b765d90a9008f9fe1dd',
+'5d41d830a834c702a2a380e8',
+'5d5af312dd1aed0082b311cf',
+'5c0adbaa0673b4002efeac77',
+'5d693a39afdf49033a720b9c',
+'5cc8b833c323ae01be8966a8',
+'5cb79cf3704fc5064c1dbc55',
+'5d1b8b0712be34009f54ff92',
+'5cfe5ab4e3ae8505136a62b4',
+'5d8ce116105b3800c80ee76c',
+'5bb5076aed60a1002c8e8fc2',
+'5da601ba0821bc181a4ea96d',
+'5d7a8f6134440f0514f0c3f1',
+'5bcf9d4c568514002e6c24b8',
+'5b198f11adbad1002f301b2c',
+'5d7811021b5eb70643e298f9',
+'5e31989129e96a00084b5be5',
+'5e4c0946426c450007615775',
+'5da64a26d954fb1a6e14eaa7',
+'5d7a6888a527d503f11f37b4',
+'5d8e2946443b8a03f072f2dc',
+'5ce41b4e69ab26006c2ff58d',
+'5c09b9d330900f00296ad997',
+'5c532de3ff4f51002dae9cd8',
+'5e5824b5106e4300063d9080',
+'5b9804bbf62e3f002801f33e',
+'5c37af9757b9970029a9b84f',
+'5d48511a3158181138bd25a6',
+'5c1273b7088544002811a25d',
+'5d00fbc488bb24017533c13c',
+'5ba51f8bb4fba6002cac5b6e',
+'5be07583e1c774002d3b377f',
+'5c476111a108190030ff2f2b',
+'5c3794cc57b9970029a9b82b',
+'5d03c8f2e6bb07002c01581a',
+'5d52e4538a2b170401fde782',
+'5d952c948ee5670317d0d09f') 
+AND CONVERT_TIMEZONE('America/Denver', start_minute)::date BETWEEN '2020-03-30' AND '2020-04-21' )
+ -- AND CONVERT_TIMEZONE('America/Denver', GETDATE())::DATE )
+WHERE percent_complete >= 0.7
+GROUP BY user_id, login__ifit__email )
+WHERE count >= 7 -- change as needed (like >=7)
+ORDER BY count DESC
+
+/* A3 : Avg # of workouts performed (of ALL users not just ATW) during this time frame */
+SELECT AVG(wkout_count) FROM (
+  SELECT user_id, 
+    SUM (CASE WHEN unique_logs."start" IS NOT NULL THEN 1
+        WHEN unique_logs."start" IS NULL THEN 0 
+        END) AS Wkout_Count
+  FROM unique_logs
+  WHERE CONVERT_TIMEZONE('America/Denver',start_minute)::date BETWEEN '2020-03-30' AND '2020-04-21'
+  GROUP BY user_id)
+  
+/* A4: Ave # of workouts performed from those that signed up (new users) in range */
+SELECT AVG(wkout_count) FROM ( 
+SELECT unique_logs.user_id,
+  SUM (CASE WHEN unique_logs."start" IS NOT NULL THEN 1
+      WHEN unique_logs."start" IS NULL THEN 0
+      END) as Wkout_Count
+FROM trevor_redbox_group 
+JOIN unique_logs on trevor_redbox_group._id = unique_logs.user_id
+JOIN temp_ATW_Users_TL_2 B on unique_logs.user_id = B.user_id
+WHERE CONVERT_TIMEZONE('America/Denver',start_minute)::date BETWEEN '2020-03-30' AND '2020-04-21'
+GROUP BY unique_logs.user_id, login__ifit__email, account__subscription_type, "created")
+
+/* A5: Avg # of wkouts performed from those that completed the challenge and signed up */
+SELECT AVG(count) FROM (
+select * from ( 
+select user_id, personal__firstname, personal__lastname, login__ifit__email, count(*) from ( 
+select temp_ATW_Users_TL_2.user_id, login__ifit__email, personal__firstname, personal__lastname, 
+        unique_logs.workout_id, unique_logs."type", unique_logs.duration, target_type, target_value,
+       (unique_logs.duration / 1000) as Duration_Secs,
+       round((unique_logs.duration / 1000) / target_value, 2) as Percent_Complete
+from temp_ATW_Users_TL_2 --this was created from users supplied in csv from Tracy - took Unique from list and made table
+LEFT JOIN prodmongo.users on temp_ATW_Users_TL_2.user_id = users._id
+LEFT JOIN unique_logs on users._id = unique_logs.user_id 
+LEFT JOIN prodmongo.workouts on unique_logs.workout_id = workouts._id
+WHERE unique_logs.workout_id IN ('5c5090c9b3b7a702dffe4db7',
+'5be65a707f9749002daa235f',
+'5dd5a3b23354ad00a23e516a',
+'5dd6eb4b5fa50e002dfcd3d4',
+'5dc1b60a43c74a01090c0fa6',
+'5dd589556bce4600319ea974',
+'5c33bc2d03777a0043e60a27',
+'5dd41ccb3344720079a9a6c6',
+'5dd5703e458a8b007cc0e8d5',
+'5c4b789637e65804dfc1369e',
+'5c10009c4de9ec002931179f',
+'5dd45b1f3fc9bf0101a32037',
+'5c12b7482c73e501177aa064',
+'5c4f9342555423006d7eb85d',
+'5c09abf930900f00296ad985',
+'5dd4502f8be18700344d9874',
+'5c18097f3b8069002d3e90a8',
+'5e13695cb7e4ac04b125ff0f',
+'5dd6b4f0aab46c015f7726f8',
+'5dd438789b33a302739fec30',
+'5c5c3fc30a859502692e4d97',
+'5dd2b41c08f91c0030557211',
+'5dbcab2da199c901371704dd',
+'5af328e803187d002d26d24f',
+'5dd6b656af3dcc0126925d0e',
+'5dcb42b858409000ab9b2860',
+'5d5af312dd1aed0082b311cf',
+'5cc8b833c323ae01be8966a8',
+'5dcee4e80fb2050035236576',
+'5d1b8b0712be34009f54ff92',
+'5c0adbaa0673b4002efeac77',
+'5bb5076aed60a1002c8e8fc2',
+'5da601ba0821bc181a4ea96d',
+'5d7a8f6134440f0514f0c3f1',
+'5dc1c8f36e903a002ea48f9a',
+'5c64a0846f74c90124b26508',
+'5dc1e20a6e903a002ea5cc72',
+'5cb79cf3704fc5064c1dbc55',
+'5d41d830a834c702a2a380e8',
+'5e064b765d90a9008f9fe1dd',
+'5c754dd9b0e21d0181c0782f',
+'5c86f101d8715c0170fc09c0',
+'5c64a0846f74c90124b26508',
+'5d1ba6040e98210099abc480',
+'5c754dd9b0e21d0181c0782f',
+'5e5457ef4c11ae00071ba70f',
+'5af328e803187d002d26d24f',
+'5e064b765d90a9008f9fe1dd',
+'5d41d830a834c702a2a380e8',
+'5d5af312dd1aed0082b311cf',
+'5c0adbaa0673b4002efeac77',
+'5d693a39afdf49033a720b9c',
+'5cc8b833c323ae01be8966a8',
+'5cb79cf3704fc5064c1dbc55',
+'5d1b8b0712be34009f54ff92',
+'5cfe5ab4e3ae8505136a62b4',
+'5d8ce116105b3800c80ee76c',
+'5bb5076aed60a1002c8e8fc2',
+'5da601ba0821bc181a4ea96d',
+'5d7a8f6134440f0514f0c3f1',
+'5bcf9d4c568514002e6c24b8',
+'5b198f11adbad1002f301b2c',
+'5d7811021b5eb70643e298f9',
+'5e31989129e96a00084b5be5',
+'5e4c0946426c450007615775',
+'5da64a26d954fb1a6e14eaa7',
+'5d7a6888a527d503f11f37b4',
+'5d8e2946443b8a03f072f2dc',
+'5ce41b4e69ab26006c2ff58d',
+'5c09b9d330900f00296ad997',
+'5c532de3ff4f51002dae9cd8',
+'5e5824b5106e4300063d9080',
+'5b9804bbf62e3f002801f33e',
+'5c37af9757b9970029a9b84f',
+'5d48511a3158181138bd25a6',
+'5c1273b7088544002811a25d',
+'5d00fbc488bb24017533c13c',
+'5ba51f8bb4fba6002cac5b6e',
+'5be07583e1c774002d3b377f',
+'5c476111a108190030ff2f2b',
+'5c3794cc57b9970029a9b82b',
+'5d03c8f2e6bb07002c01581a',
+'5d52e4538a2b170401fde782',
+'5d952c948ee5670317d0d09f') 
+AND CONVERT_TIMEZONE('America/Denver', start_minute)::date BETWEEN '2020-03-30' AND '2020-04-21' )
+ -- AND CONVERT_TIMEZONE('America/Denver', GETDATE())::DATE )
+WHERE percent_complete >= 0.7
+GROUP BY user_id, personal__firstname, personal__lastname, login__ifit__email )
+WHERE count >= 7 -- change as needed (like >=7)
+ORDER BY count DESC  )
