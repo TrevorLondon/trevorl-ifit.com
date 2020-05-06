@@ -1,0 +1,8 @@
+/* Creating master table of ALL new users between range */
+
+create table public.trevor_redbox_group as (
+  SELECT distinct(users._id), login__ifit__email, account__subscription_type, "created", account__payment_type
+  FROM prodmongo.users
+  LEFT JOIN prodmongo.orders on users._id = orders.user_Id
+  WHERE CONVERT_TIMEZONE('America/Denver',"created")::date BETWEEN '2020-01-23' AND '2020-04-21'
+  AND promo_code != 'FREE30ISO' )
