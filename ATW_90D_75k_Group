@@ -1,0 +1,26 @@
+/* 75k users that logged a wkout with status flag */
+select membership_type, count(*) FROM (
+SELECT trevor_redbox_wkout_group.*, trial_membership,
+        CASE WHEN "date" BETWEEN order_date - INTERVAL '2 minute' AND order_date + INTERVAL '2 minute'
+                AND trial_membership = 'true' THEN 'Free_Trial'
+         WHEN subscription_set_to = 'free' THEN 'Free'
+         ELSE 'Paid'
+         END as Membership_Type
+FROM trevor_redbox_wkout_group
+LEFT JOIN (
+      SELECT * FROM (
+        SELECT users_id, "date", subscription_set_to, row_number() over (partition by users_id order by "date" DESC) as Most_Recent
+        FROM prodmongo.users__account_history
+        WHERE "date"::date < '2020-04-21')
+       WHERE Most_Recent = 1) Most_Recent_UAH 
+ON trevor_redbox_wkout_group._id = Most_Recent_UAH.users_id
+LEFT JOIN (
+        SELECT * FROM (
+          SELECT user_id, order_date, orders._id, row_number() over (partition by user_id order by order_date DESC) as Ord_Date
+          FROM prodmongo.orders
+          WHERE order_date::date < '2020-04-21')
+        WHERE Ord_Date = 1) Order_Date_Table
+ON Most_Recent_UAH.users_id = Order_Date_Table.user_id
+LEFT JOIN prodmongo.orders__items on Order_Date_Table._id = orders__items.orders_id
+LEFT JOIN prodmongo.items on orders__items."item" = items._id)
+GROUP BY membership_type
