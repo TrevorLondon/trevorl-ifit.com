@@ -1,5 +1,7 @@
-SELECT program, count(*) FROM (
-SELECT user_id, "Program", login__ifit__email, count(*)
+SELECT * FROM (
+SELECT user_id, login__ifit__email, personal__firstname, personal__lastname, 
+       shipping__name, shipping__street1, shipping__city, shipping__state, shipping__country, 
+       programs_id, "Program", count(*)
 FROM (
 SELECT *, CASE WHEN workout_id IN ('5e1cbf54d7a7fa003502fd7d',
         '5e1ca98a4d7c6706e0be375d',
@@ -7,16 +9,18 @@ SELECT *, CASE WHEN workout_id IN ('5e1cbf54d7a7fa003502fd7d',
         '5e1cc4976dff550033cdfb52',
         '5e2752493ec1b50008b6d92b') THEN 'Niagra'
         ELSE 'Switzerland'
-        END as "Program"
-        
+        END as "Program"      
 FROM ( 
         SELECT A.user_id, start_minute, duration, workout_id,
              (duration / 1000) as Duration_Secs,
              round((duration / 1000) / target_value, 2) as Percent_Complete,
-             login__ifit__email
+             login__ifit__email, personal__firstname, personal__lastname, shipping__name,
+             shipping__street1, shipping__city, shipping__state, shipping__country, 
+             programs_id
         FROM temp_Niag_Switz_Users_TL A
         JOIN unique_logs B on A.user_id = B.user_id
         LEFT JOIN prodmongo.workouts on B.workout_id = workouts._id
+        LEFT JOIN prodmongo.programs__workouts on workouts._id = programs__workouts.workouts
         LEFT JOIN prodmongo.users on A.user_id = users._id
  WHERE CONVERT_TIMEZONE('America/Denver', start_minute)::date BETWEEN '2020-05-01' AND '2020-05-19'
  AND workout_id IN ('5c0a9a5030900f00296ad9bc',
@@ -43,9 +47,10 @@ FROM (
 '5e1ca98a4d7c6706e0be375d',
 '5e1cb9722ad4be04cddd4034',
 '5e1cc4976dff550033cdfb52',
-'5e2752493ec1b50008b6d92b')) 
+'5e2752493ec1b50008b6d92b'))
 WHERE percent_complete >= 0.7)
-GROUP BY user_id, program, login__ifit__email)
+GROUP BY user_id, login__ifit__email, personal__firstname, personal__lastname, 
+       shipping__name, shipping__street1, shipping__city, shipping__state, shipping__country, 
+       programs_id, "Program")
 WHERE (program = 'Switzerland' AND count >= 5) 
 OR (program = 'Niagra' AND count >= 4)
-GROUP BY program
