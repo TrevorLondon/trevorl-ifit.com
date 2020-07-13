@@ -1,5 +1,6 @@
 /* This will not pull in people that completed the workouts over the course of the whole month if you're cutting it in halfs so you'll need to do a whoel month
- pull for those people */
+ pull for those people.
+ Make sure the workoud_ids are not pulling NULL values from prodmongo.workouts! If so, find an avg and use that as the denominator */
 
 SELECT *
 FROM (
