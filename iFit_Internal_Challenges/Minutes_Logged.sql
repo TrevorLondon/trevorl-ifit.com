@@ -2,7 +2,7 @@ WITH testers_actuals AS (
 	SELECT ul.*
 	FROM unique_logs ul 
 	JOIN prodmongo.users on ul.user_id = users._id
-	WHERE CONVERT_TIMEZONE(users.personal__tz,"start") BETWEEN '2020-09-07' AND '2020-09-13'
+	WHERE CONVERT_TIMEZONE(users.personal__tz,"start") BETWEEN '2020-09-28' AND '2020-10-04'
 	AND ((extract('hour' from CONVERT_TIMEZONE(users.personal__tz,"start")) >= 08 
 		OR extract('hour' from CONVERT_TIMEZONE(users.personal__tz,"start"))) < 17)
 	AND ul.user_id IN ('50b44371c3fff42c55000a8c',
@@ -304,7 +304,53 @@ WITH testers_actuals AS (
 '5f11df0b2b778700ba666b7f',
 '5f32e8697f4f6400330fb324',
 '5a0f7aabbe255a00475422f6',
-'5cc22946d4dee900bf31dfe2')
+'5cc22946d4dee900bf31dfe2',
+'5cc87fa7c334170102b511da',
+'5c79d9a2ef3fef0029dea67c',
+'5cc87fa7c334170102b511da',
+'5f456b1875eb3700a2266ecd',
+'5eea7001a742050038e2f432',
+'5e30b9ab168e3e00f164a604',
+'5c0ec4835d3fdd0191ba7c19',
+'5e14fd42dbcc56002e1af27b',
+'5da097158c71f803bf0a1a2a',
+'5e877829379f69007946e64c',
+'5f230f77e4806a003bf7f3aa',
+'5549162b11c05b687dc72dbb',
+'5f0e048d29e31e0033442835',
+'5f0e0bbe9cc4d20034b8cc74',
+'5f04f9fccb6db2007c0ccb45',
+'5f4568bcab3c2e00a38eb557',
+'5f3166f59a3a1e00310ba3d0',
+'5ec54de1bda3ea023d6a1e63',
+'5f0e0bbe9cc4d20034b8cc74',
+'5df92c2dd68e1d04062677df',
+'56bbd57e57ea4d1e00d8fd1e',
+'5e345cbcde96f504bf2d0eec',
+'5cb551e40c4aaa0030b56fc5',
+'5b71eb434b608f0058dd9975',
+'5bc8ea39690fce002b5fa018',
+'5f456a619f4659003a07ef8b',
+'5de6b1265b5642003d2ee873',
+'5e161c8f39b197008c8b61c4',
+'5cc87f295bb2b3007f82b914',
+'59a6eeb9185507003f99ddef',
+'5f230f77e4806a003bf7f3aa',
+'5f04f58a7367ca0035a5e0dc',
+'5f0e048d29e31e0033442835',
+'5c198298b023ea0031375350',
+'5de6c9134502610038ae93e9',
+'5c6c56aa556d8400857271c9',
+'5f04f9fccb6db2007c0ccb45',
+'5d353ccc963af502cefcf21c',
+'5eea7001a742050038e2f432',
+'5d2e2a5d818a2300314e992f',
+'5f3307b1bc6a360031d731c3',
+'5f5b94a6ec955d002d483e2b',
+'5f5a7a94694bea002e70294c',
+'5f5a7d26a4ac83003a999b5b',
+'5f624ff3c3eeb10142a2d6de',
+'5f6101ed0eeb7900a004509b')
 )
 SELECT user_id, login__ifit__email, ROUND(sum(duration / 60000),2) AS total_wkout_min
 FROM (
@@ -312,7 +358,7 @@ select login__ifit__email, ul.*
 from prodmongo.users
 join unique_logs ul on users._id = ul.user_id
 left JOIN testers_actuals on ul.user_id = testers_actuals.user_id
-WHERE CONVERT_TIMEZONE('America/Denver',ul."start")::date BETWEEN '2020-09-07' AND '2020-09-13'
+WHERE CONVERT_TIMEZONE('America/Denver',ul."start")::date BETWEEN '2020-09-28' AND '2020-10-04'
 AND (login__ifit__email LIKE '%@ifit.com%'
 OR login__ifit__email IN ('laurelbstewart73@gmail.com',
 'joseph.chrisman@gmail.com',
@@ -321,4 +367,5 @@ OR login__ifit__email IN ('laurelbstewart73@gmail.com',
 'chasewatterson@gmail.com',
 'Jacob.thurman@gmail.com') )
 )
-GROUP BY user_id, login__ifit__email
+GROUP BY user_id, login__ifit__email 
+ORDER BY total_wkout_min DESC
