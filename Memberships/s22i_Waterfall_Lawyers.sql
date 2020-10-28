@@ -1,3 +1,39 @@
+--First block is the code that created the table to use for the bottom block final output
+create table public.tl_s22i_users AS (
+SELECT * FROM 
+(
+WITH users AS (
+select distinct(ul.user_id), software_number, MIN(ul."start") as first_workout
+        --row_number() over (partition by ul.user_id order by "start") as ord_events
+from unique_logs ul
+where ul.software_number IN ('392570', '425738', '426458')
+group by 1,2
+)
+select users.user_id, 
+       users.first_workout,
+       nu.mst_membership_start_date as first_paid_date, 
+       oum.software_number as oldest_machine, 
+       users.software_number as ul_software_number,
+       u.is_secondary as user_is_secondary,
+       CASE WHEN oldest_machine <> ul_software_number THEN 'New_Bike'
+        WHEN oldest_machine = ul_software_number THEN 'Old_Bike'
+        ELSE 'Other'
+        END AS equip_factor
+from users
+JOIN prodmongo.users u on users.user_id = u._id
+left JOIN new_users nu on users.user_id = nu.users_id
+left JOIN oldest_user_machines oum on users.user_id = oum.users_id
+WHERE u.is_secondary = 0
+AND oldest_machine <> ul_software_number 
+) user_set
+LEFT JOIN users__account_history uah on user_set.user_id = uah.users_id
+        AND user_set.first_workout >= uah.start_date
+        AND user_set.first_workout < coalesce(uah.end_date,getdate())
+         --523 Users Ole Machine from Memorial Day Promo,etc.
+)
+
+--Once that table is built/updated, you can then run this 
+
 SELECT cohort,
        calendar_month_start,
        cohort_memb_type,
