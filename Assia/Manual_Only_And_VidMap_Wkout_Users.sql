@@ -53,3 +53,21 @@ ON u._id = sub_set.user_id
 WHERE COALESCE(u.personal__country, u.shipping__country, u.billing__country) IN ('US','USA')
 ORDER BY random()
 LIMIT 75
+
+                    
+                    
+ -- Used this a check on specific Users --
+SELECT ul.user_id,
+       ul.start,
+       sc.equipment_type,
+       CASE WHEN ws.brightcove_video_id IS NOT NULL THEN 'VIDEO'
+            WHEN ws.geospatial__total_distance > 0 THEN 'MAP'
+            WHEN al.duration > 0 AND ws.target_value IS NULL THEN 'MANUAL'
+            ELSE 'OTHER'
+            END AS wkout_type
+from unique_logs ul
+JOIN prodmongo.stationaryconsoles sc on ul.software_number = sc.software_number
+JOIN prodmongo.activitylogs al on ul._id = al._id
+JOIN workout_store.workouts ws on ul.workout_id = ws._id
+where ul.user_id = '50b4c8509371afe65d00596f'
+AND CONVERT_TIMEZONE('AMERICA/DENVER',ul."start") >= CONVERT_TIMEZONE('AMERICA/DENVER',GETDATE()) - 90
