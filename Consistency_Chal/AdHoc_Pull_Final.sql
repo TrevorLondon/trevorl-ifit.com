@@ -4,11 +4,11 @@
 WITH running_champs AS (
 WITH tl_users_ids AS (
 SELECT tl.user_id,
-	   u._id as users_id 
+	   u._id as users_id
 FROM tl_consistency_challenge_users tl
 JOIN prodmongo.users u on tl.user_id = u.login__ifit__email
 )
-SELECT distinct(users_id) 
+SELECT distinct(users_id)
 FROM (
 SELECT users_id,
        --count(wkout_week) as consecutive_weeks
@@ -17,7 +17,7 @@ FROM (
 SELECT users_id,
 	   local_wkout_week_start as wkout_week,
 	   count(*)
-FROM ( 
+FROM (
 SELECT tl.users_id,
 	   ul.workout_id,
 	   CASE WHEN al.workout_context IN ('scheduledPre','scheduledLive') THEN 'LIVE'
@@ -41,8 +41,8 @@ GROUP BY 1,2
 WHERE "count" >= 3
 group by 1, wkout_week
 )
---WHERE ord_weeks LIKE ('2020-10-12,2020-10-19,2020-10-26%')
-WHERE ord_weeks LIKE ('2020-10-12,2020-10-19,2020-10-26%')
+WHERE ord_weeks IN ('2020-10-12,2020-10-19,2020-10-26,2020-11-02,2020-11-09,2020-11-16,2020-11-23,2020-11-30')
+    OR ord_weeks IN ('2020-10-12,2020-10-19,2020-10-26,2020-11-02,2020-11-09,2020-11-23,2020-11-30')
 )
 SELECT u.login__ifit__email
 FROM running_champs rc
