@@ -1,3 +1,5 @@
+-- This is of the ~20k Users that initially signed up. Full list was provided by Mktg and I built the table public.tl_consistency_challenge_users with these emails
+
 WITH running_champs AS (
 WITH tl_users_ids AS (
 SELECT tl.user_id,
