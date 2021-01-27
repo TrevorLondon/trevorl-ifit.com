@@ -1,6 +1,6 @@
 --This is the query that will now identify every single type of membership combo/oddity and bucket them into the final groupings. 
 
-SELECT '2021-01-13'::date as date,
+SELECT '2021-01-19'::date as date,
             user_snapshot.primary_or_sec,
             user_snapshot.user_type,
             user_snapshot.membership_type,
@@ -14,16 +14,16 @@ SELECT *,
             WHEN promo_code = '1MEMBED' AND membership_type <> 'FREE NONE' THEN 'Trial'
             WHEN promo_code = '1MEMBED' AND membership_type = 'FREE NONE' THEN 'Free'
             WHEN ord_event_types LIKE ('%freemotionOnRegistration%') THEN 'Trial'
-            WHEN ord_event_types LIKE ('%oneHundredWorkouts%') AND (prev_trial_flag = 'false' OR prev_trial_flag IS NULL)
+            WHEN ord_event_types LIKE ('%HundredWorkouts%') AND (prev_trial_flag = 'false' OR prev_trial_flag IS NULL)
                 AND prev_sub <> 'free' AND prev_pay <> 'none' THEN 'Paid'
-            WHEN ord_event_types LIKE ('%oneHundredWorkouts%') AND (prev_trial_flag = 'false' OR prev_trial_flag IS NULL)
+            WHEN ord_event_types LIKE ('%HundredWorkouts%') AND (prev_trial_flag = 'false' OR prev_trial_flag IS NULL)
                 AND prev_sub <> 'free' AND prev_pay = 'none' THEN 'Free'
-            WHEN ord_event_types LIKE ('%oneHundredWorkouts%') AND prev_trial_flag = 'true'
+            WHEN ord_event_types LIKE ('%HundredWorkouts%') AND prev_trial_flag = 'true'
                  AND prev_sub <> 'free' THEN 'Trial'
             WHEN membership_type <> 'FREE NONE' THEN 'Paid'
             WHEN membership_type = 'FREE NONE' THEN 'Free'
             ELSE NULL
-            END as user_type      
+            END as user_type
 FROM (
          SELECT *,
                 ROW_NUMBER() OVER (PARTITION BY users_id ORDER BY "date" DESC) as ord_events,
@@ -32,18 +32,18 @@ FROM (
                     WHEN subscription_set_to = 'coach-plus' THEN
                         CASE
                             WHEN payment_set_to = 'none' AND employee = 0 AND ord_event_types LIKE ('%freemotionOnRegistration%')
-                                 THEN 'FAMILY YEARLY' 
+                                 THEN 'FAMILY YEARLY'
                             WHEN payment_set_to = 'none' AND employee = 0 AND ord_event_types NOT LIKE ('%freemotionOnRegistration%')
-                                THEN 'FREE NONE' 
-                            WHEN payment_set_to = 'none' AND employee = 1 AND primary_or_sec = 'primary' THEN 'FAMILY YEARLY' 
+                                THEN 'FREE NONE'
+                            WHEN payment_set_to = 'none' AND employee = 1 AND primary_or_sec = 'primary' THEN 'FAMILY YEARLY'
                             WHEN payment_set_to IN ('yearly', 'two-year') THEN 'FAMILY YEARLY'
                             WHEN payment_set_to = 'monthly' THEN 'FAMILY MONTHLY'
                             ELSE 'FAMILY UNKNOWN'
                         END
                     WHEN subscription_set_to = 'premium' THEN
                         CASE
-                            WHEN payment_set_to = 'none' AND employee = 0 THEN 'FREE NONE' 
-                            WHEN payment_set_to = 'none' AND employee = 1 THEN 'FAMILY YEARLY' 
+                            WHEN payment_set_to = 'none' AND employee = 0 THEN 'FREE NONE'
+                            WHEN payment_set_to = 'none' AND employee = 1 THEN 'FAMILY YEARLY'
                             WHEN payment_set_to IN ('yearly', 'two-year') THEN 'INDIVIDUAL YEARLY'
                             WHEN payment_set_to = 'monthly' THEN 'INDIVIDUAL MONTHLY'
                             ELSE 'INDIVIDUAL UNKNOWN'
@@ -97,9 +97,9 @@ FROM (
                   ) orders
                     ON uah.users_id = orders.user_id
                          AND uah.date BETWEEN (orders.order_date - INTERVAL '30 second') AND (orders.order_date + INTERVAL '30 second')
-                  WHERE CONVERT_TIMEZONE('AMERICA/DENVER', uah.date)::DATE <= '2021-01-13'
+                  WHERE CONVERT_TIMEZONE('AMERICA/DENVER', uah.date)::DATE <= '2021-01-19'
               ) ordered_acct_changes
      )
 WHERE ord_events = 1
-) user_snapshot 
+) user_snapshot
 GROUP BY 1,2,3,4
