@@ -1,4 +1,9 @@
-select *
+select first_name,
+       last_name,
+       phone_number,
+       email,
+       wkout_count,
+       personal_timezone
     from (
     WITH churned_users AS (
     SELECT *
@@ -13,7 +18,7 @@ select *
     )
     WHERE ord_events = 1
     AND ACCOUNT_HISTORY_CHURN_FLAG = 1
-    AND churned_date >= '2021-04-05' AND churned_date < '2021-04-07'
+    AND churned_date::DATE = '2021-04-12'
     ),
     workouts as (
     SELECT cu.website_user_id,
@@ -63,5 +68,3 @@ select *
     WHERE ord_events = 1
     AND churned_from_memb_type = 'Family/Yearly'
     AND (phone_number IS NOT NULL OR email IS NOT NULL)
- )
- GROUP BY 1
