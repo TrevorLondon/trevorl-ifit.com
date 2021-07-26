@@ -23,3 +23,18 @@ and is_current_version = 1
 group by 1
 )
 where usage >= 20
+
+
+
+--Most RECENTLY used one --
+select count(*)
+from (
+select equipment_product_line,
+       unique_video_id,
+       count(activity_log_id) as usage
+from analytics_revenue_mart.fact_activity_log_composite
+where unique_video_id IS NOT NULL
+and is_current_version = 1
+group by 1,2
+)
+where usage >= 50
