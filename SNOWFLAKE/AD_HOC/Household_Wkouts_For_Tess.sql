@@ -22,6 +22,54 @@ order by 1,2
 ),
 users_memb as (
 select b.website_user_id,
+       du.first_anniversary_date,
+       du.first_anniversary_category
+from base b
+left join analytics_warehouse.dim_users du on b.website_user_id = du.website_user_id
+where first_anniversary_date < GETDATE()
+and du.cohort_payment_interval = 'Yearly'
+)
+select first_anniversary_category,
+       count(*)
+from users_memb
+group by 1
+select wkout_month,
+       sum(total_household_wkouts) as total_wkouts,
+       count(user_household_id) as total_users
+from wkouts_summed
+join users_memb on wkouts_summed.user_household_id = users_memb.website_user_id
+where users_memb.first_anniversary_category IN ('Renewed', 'Mobility')
+group by 1
+order by 1
+
+
+
+
+
+with base as (
+    select distinct website_user_id
+    from analytics_warehouse.fact_challenge_completion
+    where completed_during_challenge = 1
+),
+households as (
+    select du.user_household_id,
+           b.website_user_id,
+           al.activity_date
+    from base b 
+    left join analytics_warehouse.dim_users du on b.website_user_id = du.website_user_id
+    left join analytics_warehouse.fact_activity_log al on du.website_user_id = al.website_user_id
+    order by 1,2,3
+),
+wkouts_summed as (
+select user_household_id,
+       date_trunc('month', activity_date)::DATE as wkout_month,
+       count(*) as total_household_wkouts
+from households 
+group by 1,2
+order by 1,2
+),
+users_memb as (
+select b.website_user_id,
        du.user_cohort_date::DATE as cohort_date,
        (du.cohort_subscription_type || '/' || du.cohort_payment_interval) as cohort_membership_type,
        de.equipment_product_spec_wifi as wifi,
